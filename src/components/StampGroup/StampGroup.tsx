@@ -12,6 +12,7 @@ interface StampGroupProps {
   isLoading?: boolean;
   openStickers: Record<string, boolean>;
   onOpenChange: (stampId: string, open: boolean) => void;
+  claimsClosed?: boolean;
 }
 
 export const StampGroup: FC<StampGroupProps> = ({
@@ -20,6 +21,7 @@ export const StampGroup: FC<StampGroupProps> = ({
   isLoading = false,
   openStickers,
   onOpenChange,
+  claimsClosed = false,
 }) => {
   const router = useRouter();
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
@@ -49,7 +51,8 @@ export const StampGroup: FC<StampGroupProps> = ({
                 isPublicClaim={stamp.publicClaim}
                 open={openStickers[stamp.id] ?? false}
                 onOpenChange={(open) => onOpenChange(stamp.id, open)}
-                onClaim={(code) => onStampClick?.(code, stamp)}
+                onClaim={claimsClosed ? undefined : (code) => onStampClick?.(code, stamp)}
+                claimsClosed={claimsClosed}
                 isLoading={isLoading}
                 promoteUrl={stamp.promote_url}
                 className="w-full h-full"

@@ -31,6 +31,7 @@ type StickerProps = {
   isLoading?: boolean;
   onOpenChange?: (open: boolean) => void;
   onClaim?: (code: string) => void;
+  claimsClosed?: boolean;
 };
 
 export const Sticker: FC<StickerProps> = (props) => {
@@ -49,6 +50,7 @@ export const Sticker: FC<StickerProps> = (props) => {
     open = false,
     isLoading = false,
     onOpenChange,
+    claimsClosed = false,
   } = props;
 
   const [status, setStatus] = useState<"pending" | "default" | "success" | "error">(
@@ -178,7 +180,11 @@ export const Sticker: FC<StickerProps> = (props) => {
             </div>
           </div>
           <div className="mb-4 flex flex-col items-center">
-            {!isPublicClaim && (
+            {claimsClosed ? (
+              <p className="mt-8 max-w-[320px] text-center font-inter text-[16px] leading-6 text-[#ABBDCC]">
+                Claims are closed. Thank you for being part of this.
+              </p>
+            ) : !isPublicClaim && (
               <div
                 className={cn(
                   "relative mt-auto flex items-center sm:mt-[103px]",
@@ -245,21 +251,23 @@ export const Sticker: FC<StickerProps> = (props) => {
                   />
                 </Button>
               </DialogClose>
-              <Button
-                className="h-[42px] w-[197px] sm:h-[52px] sm:w-[227px]"
-                disabled={isLoading || !isPublicClaim && (status !== "default" || !code)}
-                onClick={() => {
-                  void handleClaim(code);
-                }}
-              >
-                {isPublicClaim ? "Claim" : "Claim " + name}
-                {isLoading && <Image
-                  src={"/images/loader.svg"}
-                  alt="loader"
-                  width={16}
-                  height={16}
-                />}
-              </Button>
+              {!claimsClosed && (
+                <Button
+                  className="h-[42px] w-[197px] sm:h-[52px] sm:w-[227px]"
+                  disabled={isLoading || !isPublicClaim && (status !== "default" || !code)}
+                  onClick={() => {
+                    void handleClaim(code);
+                  }}
+                >
+                  {isPublicClaim ? "Claim" : "Claim " + name}
+                  {isLoading && <Image
+                    src={"/images/loader.svg"}
+                    alt="loader"
+                    width={16}
+                    height={16}
+                  />}
+                </Button>
+              )}
             </div>
           </div>
         </motion.div>

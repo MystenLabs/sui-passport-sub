@@ -1,10 +1,9 @@
 "use client";
 import Image from "next/image";
 import { ContributorsTable } from "~/components/ContributorsTable/ContributorsTable";
-import { PassportCreationModal } from "~/components/PassportCreationModal/PassportCreationModal";
 import { ProfileModal } from "~/components/ProfileModal/ProfileModal";
 import { usePassportsStamps } from "~/context/passports-stamps-context";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNetworkVariables } from "~/lib/contracts";
 import { type Contributor } from "~/components/ContributorsTable/columns";
 import { useUserCrud } from "~/hooks/use-user-crud";
@@ -13,17 +12,9 @@ import {
   stampsToDisplayStamps,
   stampsToDisplayStampsWithOutPassport,
 } from "~/lib/utils";
-import type { VerifyClaimStampRequest, DisplayStamp } from "~/types/stamp";
+import type { DisplayStamp } from "~/types/stamp";
 import { useUserProfile } from "~/context/user-profile-context";
 import { useCurrentAccount, useCurrentWallet } from "@mysten/dapp-kit";
-import {
-  useBetterSignAndExecuteTransaction,
-} from "~/hooks/use-better-tx";
-import { claim_stamp } from "~/lib/contracts/claim";
-import { useStampCRUD } from "~/hooks/use-stamp-crud";
-import { type PassportFormSchema } from "~/types/passport";
-import { mint_passport } from "~/lib/contracts/passport";
-import { toast } from "sonner";
 import { Turnstile } from "@marsidev/react-turnstile";
 import { StampGroup } from "~/components/StampGroup/StampGroup";
 import { RainbowButton } from "~/components/magicui/rainbow-button";
@@ -57,11 +48,9 @@ export default function HomePage() {
   const { stamps, refreshPassportStamps } = usePassportsStamps();
   const [contributors, setContributors] = useState<Contributor[]>([]);
   const [displayStamps, setDisplayStamps] = useState<DisplayStamp[]>([]);
-  const [uploadedAvatarUrl, setUploadedAvatarUrl] = useState<string>("");
   const networkVariables = useNetworkVariables();
   const { fetchUsers, isLoading: isLoadingUsers, verifyCaptcha } = useUserCrud();
-  const { userProfile, refreshProfile, isLoading: isRefreshingProfile } = useUserProfile();
-  const { verifyClaimStamp, increaseStampCountToDb, isLoading: isVerifyingClaimStamp } = useStampCRUD();
+  const { userProfile } = useUserProfile();
   const currentAccount = useCurrentAccount();
   const { connectionStatus } = useCurrentWallet();
   const [openStickers, setOpenStickers] = useState<Record<string, boolean>>({});
@@ -69,25 +58,8 @@ export default function HomePage() {
   const [token, setToken] = useState<string | null>(null);
   const [isCaptchaVerified, setIsCaptchaVerified] = useState(false);
   const [showMobilePopover, setShowMobilePopover] = useState(false);
-  const [isSuiWallet, setIsSuiWallet] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const { hasAnySuiWallet, isSlushLikely } = useDetectSuiWallet();
-
-  const { handleSignAndExecuteTransaction: handleClaimStampTx, isLoading: isClaimingStamp } =
-    useBetterSignAndExecuteTransaction({
-      tx: claim_stamp,
-    });
-
-  // const {
-  //   handleSignAndExecuteTransactionWithSponsor,
-  //   isLoading: isMintingPassportWithSponsor,
-  // } = useBetterSignAndExecuteTransactionWithSponsor({
-  //   tx: mint_passport,
-  // });
-
-  const { handleSignAndExecuteTransaction: handleMintPassportTx, isLoading: isMintingPassportWithSponsor } = useBetterSignAndExecuteTransaction({
-    tx: mint_passport,
-  });
+  const [, setIsSuiWallet] = useState(false);
+  const { isSlushLikely } = useDetectSuiWallet();
 
   const initializeData = useCallback(async () => {
     const users = await fetchUsers();
@@ -159,127 +131,6 @@ export default function HomePage() {
     };
   }, []);
 
-  const handleClaimStampClick = async (code: string, stamp: DisplayStamp) => {
-    console.log("handleClaimStampClick", code, stamp);
-    setIsLoading(true);
-    if (!userProfile?.passport_id) {
-      toast.error("You should have a passport to claim a stamp");
-      setIsLoading(false);
-      return;
-    }
-    const stamps = userProfile?.stamps;
-    if (stamps?.some((stamp) => stamp.event === stamp?.name)) {
-      toast.error(`You have already have this stamp`);
-      setIsLoading(false);
-      return;
-    }
-    if (
-      stamp.claimCount &&
-      stamp.totalCountLimit !== 0 &&
-      stamp?.claimCount >= stamp.totalCountLimit!
-    ) {
-      toast.error("Stamp is claimed out");
-      setIsLoading(false);
-      return;
-    }
-    const requestBody: VerifyClaimStampRequest = {
-      stamp_id: stamp?.id,
-      claim_code: code,
-      passport_id: userProfile?.id.id,
-      last_time: Number(userProfile?.last_time),
-      stamp_name: stamp?.name,
-      address: currentAccount?.address ?? "",
-      packageId: networkVariables?.originPackage,
-    };
-    const data = await verifyClaimStamp(requestBody);
-    if (!data.success) {
-      toast.error(data.error);
-      handleOpenChange(stamp.id, false);
-      setIsLoading(false);
-      return;
-    }
-    if (!data.signature || !data.valid) {
-      toast.error("Invalid claim code");
-      setIsLoading(false);
-      return;
-    }
-
-
-    // Convert signature object to array
-    const signatureArray = Object.values(data.signature);
-    await handleClaimStampTx(
-      {
-        event: stamp?.id ?? "",
-        passport: userProfile?.id.id ?? "",
-        name: stamp?.name ?? "",
-        sig: signatureArray,
-      },
-    )
-      .onSuccess(async (result) => {
-        toast.success("Stamp claimed successfully", {
-          duration: 2500
-        });
-        handleOpenChange(stamp.id, false);
-        await refreshProfile(currentAccount?.address ?? "", networkVariables);
-        await refreshPassportStamps(networkVariables);
-        // 传入用户地址和交易hash
-        await increaseStampCountToDb(stamp.id, currentAccount?.address ?? "", result?.digest);
-      })
-      .execute();
-    setIsLoading(false);
-  };
-
-  const handlePassportCreation = async (values: PassportFormSchema) => {
-    setIsLoading(true);
-    let avatarUrl = uploadedAvatarUrl;
-
-    // If we have a new file, upload it and get the URL
-    if (values.avatarFile) {
-      if (!(values.avatarFile instanceof Blob)) {
-        throw new Error("Avatar file must be a valid image file");
-      }
-      try {
-        const formData = new FormData();
-        formData.append("file", values.avatarFile);
-        const response = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-        });
-        const data = (await response.json()) as { url: string };
-        avatarUrl = data.url;
-        setUploadedAvatarUrl(data.url);
-      } catch (error) {
-        console.log(error);
-        toast.error("Error uploading avatar");
-        setIsLoading(false);
-        throw error;
-      }
-    }
-
-    await handleMintPassportTx(
-      {
-        name: values.name,
-        avatar: avatarUrl,
-        introduction: values.introduction ?? "",
-        x: "",
-        github: "",
-        email: "",
-      },
-    )
-      .onSuccess(async () => {
-        await refreshProfile(currentAccount?.address ?? "", networkVariables);
-        void handleTableRefresh()
-        toast.success("Passport minted successfully");
-        // Clear the stored URL after successful mint
-        setUploadedAvatarUrl("");
-      })
-      .onError((error) => {
-        toast.error(`Error minting passport: ${error}`);
-      })
-      .execute();
-    setIsLoading(false);
-  };
-
   const handleOpenChange = (stampId: string, isOpen: boolean) => {
     setOpenStickers((prev) => ({
       ...prev,
@@ -307,7 +158,7 @@ export default function HomePage() {
   return (
     <main className="flex min-h-screen flex-col items-center bg-[#02101C] text-white">
       <div className="flex w-full flex-col items-center sm:max-w-[1424px]">
-        <div className="bg-[#02101C] py-4 sm:py-6 flex w-full flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-6 sticky top-0 z-20 sm:static gap-4 sm:gap-0">
+        <div className="bg-[#02101C] py-4 sm:py-6 flex w-full flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-6 z-20 gap-4 sm:gap-0">
           <div className="flex items-center justify-between w-full sm:w-auto">
             <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
               <Image
@@ -366,15 +217,18 @@ export default function HomePage() {
             unoptimized
           />
           <div className="z-10 flex w-full flex-col items-center justify-center">
-            <h1 className="mt-8 max-w-[304px] text-center font-everett text-[40px] leading-[48px] sm:mt-16 sm:max-w-[696px] sm:text-[68px] sm:leading-[80px]">
-              Make your mark on the Sui Community
+            <h1 className="mt-8 max-w-[304px] text-center font-everett text-[40px] leading-[48px] sm:mt-16 sm:max-w-[760px] sm:text-[68px] sm:leading-[80px]">
+              Thank you
             </h1>
-            <div className="mt-6 flex max-w-[342px] flex-col gap-3 text-center font-everett_light text-[14px] text-[#ABBDCC] sm:max-w-[696px] sm:text-[16px] p-2">
-              <p>
-                The Sui community flourishes because of passionate members like you. Through content and events, your contributions help elevate our Sui Community.
+            <div className="mt-6 flex max-w-[342px] flex-col gap-4 text-center font-everett_light text-[14px] text-[#ABBDCC] sm:max-w-[640px] sm:text-[18px] sm:leading-7 p-2">
+              <p className="text-white">
+                Thank you for participating in everything thus far.
               </p>
               <p>
-                Connect your wallet today and claim your first stamp!
+                The events, the stamps, and the people who showed up are what this passport was for. Creating a passport and claiming stamps are now closed. You can still look through the stamps and the contributor list.
+              </p>
+              <p>
+                On Tuesday, October 13, 2026, at 12:00am PDT, the remaining functions on this site turn off. On Friday, October 16, 2026, the contract upgrade goes out. Passports and stamps already in your wallet stay yours.
               </p>
               <RainbowButton
                 onClick={() => window.open("https://x.com/suicommunity", "_blank")}
@@ -393,23 +247,17 @@ export default function HomePage() {
                 </div>
               </RainbowButton>
             </div>
-            <div>
-            </div>
-            {!userProfile?.passport_id && <PassportCreationModal
-              onSubmit={handlePassportCreation}
-              isLoading={isMintingPassportWithSponsor || isRefreshingProfile || isLoading}
-            />}
           </div>
         </div>
         <div className="relative flex w-full flex-col items-center bg-gradient-to-t from-[#02101C] from-95% overflow-hidden">
           <h1 className="my-10 max-w-[358px] text-center font-everett text-[40px] leading-[48px] sm:my-10 
           sm:max-w-[696px] sm:text-[68px] sm:leading-[80px]">
-            Get your stamps
+            Stamps
           </h1>
           <StampGroup
             stamps={displayStamps}
-            onStampClick={handleClaimStampClick}
-            isLoading={isClaimingStamp || isVerifyingClaimStamp || isLoading}
+            claimsClosed
+            isLoading={false}
             openStickers={openStickers}
             onOpenChange={handleOpenChange}
           />
