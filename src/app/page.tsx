@@ -131,10 +131,10 @@ export default function HomePage() {
                 Thank you for participating in everything thus far.
               </p>
               <p>
-                The events, the stamps, and the people who showed up are what this passport was for. Creating a passport and claiming stamps are now closed. You can still look through the stamps.
+                The events, the stamps, and the people who showed up are what this passport was for. Creating a passport and claiming stamps are now closed.
               </p>
               <p>
-                On Tuesday, October 13, 2026, at 12:00am PDT, the remaining functions on this site turn off. On Friday, October 16, 2026, the contract upgrade goes out. Passports and stamps already in your wallet stay yours.
+                Passports and stamps already in your wallet stay yours.
               </p>
               <RainbowButton
                 onClick={() => window.open("https://x.com/suicommunity", "_blank")}
