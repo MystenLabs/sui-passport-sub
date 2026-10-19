@@ -18,7 +18,6 @@ import { useUserProfile } from "~/context/user-profile-context";
 import { removeToken } from "~/lib/jwtManager";
 import { ConnectModal, useAccounts, useCurrentAccount, useCurrentWallet, useDisconnectWallet } from '@mysten/dapp-kit'
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import { useUserCrud } from "~/hooks/use-user-crud";
 import { show_stamp } from "~/lib/contracts/passport";
 import { useBetterSignAndExecuteTransaction } from "~/hooks/use-better-tx";
 import { toast } from "sonner";
@@ -36,7 +35,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ showMobilePopover = 
   const { connectionStatus } = useCurrentWallet()
   const [open, setOpen] = useState(false)
   const { clearProfile } = useUserProfile()
-  const { createOrUpdateUser } = useUserCrud()
 
   const { handleSignAndExecuteTransaction: handleShowStampTx, isLoading: isShowingStamp } =
     useBetterSignAndExecuteTransaction({
@@ -57,40 +55,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ showMobilePopover = 
   useEffect(() => {
     void checkChainAndConnect()
   }, [checkChainAndConnect])
-
-  // Separate effect for user data synchronization
-  useEffect(() => {
-    // Only sync if we have all required data
-    if (!currentAccount?.address ||
-      !userProfile?.passport_id ||
-      connectionStatus !== "connected") {
-      return;
-    }
-
-    // Create a stable reference to the data we want to sync
-    const userData = {
-      address: currentAccount.address,
-      stamp_count: userProfile.stamps?.length ?? 0,
-      name: userProfile.name,
-      points: Number(userProfile.points),
-      packageId: networkVariables.originPackage,
-    };
-
-    const syncTimeout = setTimeout(() => {
-      void createOrUpdateUser(userData);
-    }, 1000);
-
-    return () => clearTimeout(syncTimeout);
-  }, [
-    currentAccount?.address,
-    connectionStatus,
-    userProfile?.passport_id,
-    userProfile?.stamps?.length,
-    userProfile?.name,
-    userProfile?.points,
-    networkVariables.originPackage,
-    createOrUpdateUser // 现在可以安全地加入依赖数组
-  ]);
 
   const handleStickerClick = async (id: string) => {
     if (!userProfile?.passport_id) {
